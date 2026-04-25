@@ -10,9 +10,5 @@ venv/
 .vscode/
 logs/
 *.log
-.env
-*.db
-__pycache__/
-.venv/
 CLAUDE.md
 .claude/
