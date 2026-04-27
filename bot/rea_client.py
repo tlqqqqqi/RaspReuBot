@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 from datetime import date
 
@@ -20,7 +21,7 @@ _sem = asyncio.Semaphore(5)
 _retry = retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=1, max=10),
-    retry=retry_if_exception_type((aiohttp.ClientError, asyncio.TimeoutError)),
+    retry=retry_if_exception_type((aiohttp.ClientError, asyncio.TimeoutError, json.JSONDecodeError)),
     reraise=True,
 )
 
