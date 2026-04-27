@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import date, timedelta
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import aiohttp
@@ -11,7 +11,6 @@ from .db import get_users_for_notification, upsert_user
 from .formatter import format_day, format_week
 from .parser import Day, parse_html
 from .rea_client import fetch_details, fetch_week
-from . import texts as t
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +18,7 @@ logger = logging.getLogger(__name__)
 async def _fetch_day(
     session: aiohttp.ClientSession,
     selection_key: str,
-    target: date,
+    target: datetime.date,
 ) -> str | None:
     """Return formatted day text, or None on error."""
     try:
@@ -68,32 +67,40 @@ async def _send_and_pin(
         return
 
     old_pin_id = user.get(pin_field)
+    logger.debug("Unpin attempt: chat_id=%s field=%s old_pin_id=%s", chat_id, pin_field, old_pin_id)
     if old_pin_id:
         try:
             await bot.unpin_chat_message(chat_id, old_pin_id)
+            logger.info("Unpinned msg=%s in chat=%s", old_pin_id, chat_id)
         except TelegramBadRequest:
-            pass  # message already deleted or never pinned
+            pass  # сообщение уже удалено или не было закреплено
         except Exception:
-            logger.warning("Could not unpin message %s in chat %s", old_pin_id, chat_id)
+            logger.warning("Could not unpin msg=%s in chat=%s", old_pin_id, chat_id)
 
     try:
         await bot.pin_chat_message(chat_id, msg.message_id, disable_notification=True)
+    except Exception:
+        logger.warning("Could not pin msg=%s in chat=%s", msg.message_id, chat_id)
+
+    # Сохраняем pin_id отдельно — даже если pin упал, следующий раз попробует открепить
+    try:
         await upsert_user(db_path, chat_id, **{pin_field: msg.message_id})
     except Exception:
-        logger.warning("Could not pin message %s in chat %s", msg.message_id, chat_id)
+        logger.warning("Could not save pin_id for chat_id=%s", chat_id)
 
 
 async def run_morning_job(
     bot: Bot, db_path: str, session: aiohttp.ClientSession, tz: str
 ) -> None:
-    from datetime import datetime
-    current_time = datetime.now(ZoneInfo(tz)).strftime("%H:%M")
+    now = datetime.now(ZoneInfo(tz))
+    current_time = now.strftime("%H:%M")
     users = await get_users_for_notification(db_path, "morning", current_time)
     if not users:
         return
     logger.info("Morning job: sending to %d users at %s", len(users), current_time)
+    today = now.date()
     for user in users:
-        text = await _fetch_day(session, user["selection_key"], date.today())
+        text = await _fetch_day(session, user["selection_key"], today)
         if text:
             await _send_and_pin(bot, db_path, user, text, "last_morning_pin_id")
 
@@ -101,23 +108,30 @@ async def run_morning_job(
 async def run_evening_job(
     bot: Bot, db_path: str, session: aiohttp.ClientSession, tz: str
 ) -> None:
-    from datetime import datetime
-    current_time = datetime.now(ZoneInfo(tz)).strftime("%H:%M")
+    now = datetime.now(ZoneInfo(tz))
+    current_time = now.strftime("%H:%M")
     users = await get_users_for_notification(db_path, "evening", current_time)
     if not users:
         return
     logger.info("Evening job: sending to %d users at %s", len(users), current_time)
+    tomorrow = now.date() + timedelta(days=1)
     for user in users:
-        tomorrow = date.today() + timedelta(days=1)
         text = await _fetch_day(session, user["selection_key"], tomorrow)
-        if text:
-            await _send_and_pin(bot, db_path, user, text, "last_evening_pin_id")
+        if not text:
+            continue
+        chat_id = user["chat_id"]
+        try:
+            await bot.send_message(chat_id, text, parse_mode="HTML")
+        except TelegramForbiddenError:
+            logger.info("Bot blocked by chat_id=%s, disabling evening", chat_id)
+            await upsert_user(db_path, chat_id, evening_enabled=0)
+        except Exception:
+            logger.exception("Failed to send evening message to chat_id=%s", chat_id)
 
 
 async def run_weekly_job(
     bot: Bot, db_path: str, session: aiohttp.ClientSession, tz: str
 ) -> None:
-    from datetime import datetime
     now = datetime.now(ZoneInfo(tz))
     if now.weekday() != 6:  # только воскресенье
         return
@@ -131,11 +145,9 @@ async def run_weekly_job(
     for user in users:
         selection_key = user["selection_key"]
         try:
+            # В воскресенье week_num=-1 уже отдаёт предстоящую неделю
             html = await fetch_week(session, selection_key, week_num=-1)
-            current_week = parse_html(html)
-            next_wn = current_week.week_num + 1 if current_week.week_num > 0 else -1
-            html2 = await fetch_week(session, selection_key, week_num=next_wn)
-            next_week = parse_html(html2)
+            next_week = parse_html(html)
 
             details = await asyncio.gather(
                 *(
@@ -145,9 +157,7 @@ async def run_weekly_job(
                 ),
                 return_exceptions=True,
             )
-            lessons_flat = [
-                lesson for day in next_week.days for lesson in day.lessons
-            ]
+            lessons_flat = [lesson for day in next_week.days for lesson in day.lessons]
             for lesson, result in zip(lessons_flat, details):
                 if isinstance(result, list):
                     lesson.subgroups = result

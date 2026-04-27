@@ -1,6 +1,6 @@
 from datetime import date
 
-from bot.formatter import format_day, format_week
+from bot.formatter import format_day, format_range, format_week
 from bot.parser import Day, Lesson, Week
 
 
@@ -46,6 +46,33 @@ class TestFormatDay:
         )
         text = format_day(day)
         assert "Матан" in text
+        assert "Физика" in text
+
+
+class TestFormatRange:
+    def test_range_with_lessons(self):
+        days = [
+            Day(date=date(2026, 5, 4), weekday="ПОНЕДЕЛЬНИК", lessons=[_lesson(name="Химия")]),
+            Day(date=date(2026, 5, 5), weekday="ВТОРНИК", lessons=[]),
+        ]
+        text = format_range(days, "МояГруппа")
+        assert "МояГруппа" in text
+        assert "Химия" in text
+        assert "Занятий нет" in text
+
+    def test_range_all_empty(self):
+        days = [Day(date=date(2026, 5, i), weekday="X", lessons=[]) for i in range(4, 8)]
+        text = format_range(days, "МояГруппа")
+        assert "МояГруппа" in text
+        assert "занятий нет" in text.lower()
+
+    def test_range_contains_all_days(self):
+        days = [
+            Day(date=date(2026, 5, 4), weekday="ПОНЕДЕЛЬНИК", lessons=[_lesson(name="Химия")]),
+            Day(date=date(2026, 5, 5), weekday="ВТОРНИК", lessons=[_lesson(name="Физика")]),
+        ]
+        text = format_range(days, "Г")
+        assert "Химия" in text
         assert "Физика" in text
 
 
