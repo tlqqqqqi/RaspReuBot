@@ -15,10 +15,9 @@ def main_menu() -> InlineKeyboardMarkup:
     kb.button(text=t.BTN_BY_DATE, callback_data="schedule:date")
     kb.button(text=t.BTN_BY_RANGE, callback_data="schedule:range")
     kb.button(text=t.BTN_FREE_ROOMS, callback_data="rooms")
-    kb.button(text=t.BTN_REVIEWS, callback_data="reviews")
     kb.button(text=t.BTN_CHANGE_GROUP, callback_data="change_group")
     kb.button(text=t.BTN_SETTINGS, callback_data="settings")
-    kb.adjust(2, 1, 2, 2, 2)
+    kb.adjust(2, 1, 2, 1, 2)
     return kb.as_markup()
 
 
