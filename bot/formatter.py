@@ -1,5 +1,7 @@
+import html
 from datetime import date
 
+from . import texts as t
 from .parser import Day, Lesson, SubgroupInfo, Week
 from .pleh_client import PERIOD_TIMES
 
@@ -148,6 +150,68 @@ def format_free_rooms(
     if truncated:
         parts.append(f"\n…и ещё {len(rooms) - shown} (показаны не все).")
     return "\n".join(parts)
+
+
+def _fmt_rating(value) -> str:
+    try:
+        return f"{float(value):.2f}".rstrip("0").rstrip(".")
+    except (TypeError, ValueError):
+        return "—"
+
+
+def _rating_stars(value) -> str:
+    try:
+        full = max(0, min(5, int(round(float(value)))))
+    except (TypeError, ValueError):
+        return ""
+    return "⭐" * full
+
+
+def format_review_card(stats: dict) -> str:
+    name = html.escape(stats.get("full_name") or "Преподаватель")
+    rating = _fmt_rating(stats.get("average_rating"))
+    count = stats.get("review_count") or 0
+    return t.REVIEWS_CARD.format(name=name, rating=rating, count=count)
+
+
+def _review_date(created: str | None) -> str:
+    if not created or len(created) < 10:
+        return ""
+    y, m, d = created[:4], created[5:7], created[8:10]
+    return f"{d}.{m}.{y}"
+
+
+def _review_tags(review: dict) -> list[str]:
+    tags = []
+    for sel in review.get("review_tag_selections") or []:
+        tag = (sel or {}).get("teacher_tags") or {}
+        name = (tag.get("name") or "").strip()
+        if name:
+            tags.append(name)
+    return tags
+
+
+def format_review(review: dict, pos: int, total: int) -> str:
+    stars = _rating_stars(review.get("overall_rating"))
+    rating = _fmt_rating(review.get("overall_rating"))
+    when = _review_date(review.get("created_at"))
+
+    head = f"{stars} <b>{rating}</b>" if stars else f"<b>{rating}</b>"
+    if when:
+        head += f"  ·  {when}"
+
+    lines = [f"Отзыв <b>{pos + 1}</b> из <b>{total}</b>", "", head]
+
+    tags = _review_tags(review)
+    if tags:
+        lines.append("🏷 " + html.escape(", ".join(tags)))
+
+    text = (review.get("review_text") or "").strip()
+    body = html.escape(text) if text else "<i>(без текста)</i>"
+    if len(body) > 3500:
+        body = body[:3500].rstrip() + "…"
+    lines += ["", body]
+    return "\n".join(lines)
 
 
 def format_week(week: Week, selection_name: str) -> str:

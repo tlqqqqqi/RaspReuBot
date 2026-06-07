@@ -209,6 +209,52 @@ async def fetch_days(
     return _rows_to_days(rows, is_teacher)
 
 
+async def fetch_teacher_stats(
+    session: aiohttp.ClientSession, slug: str, name: str = ""
+) -> dict | None:
+    """Рейтинг преподавателя: {id, full_name, slug, review_count, average_rating}.
+
+    Вьюхи отзывов лежат в схеме `public` (не `api`) — обычный _HDR.
+    Если по slug пусто (рассинхрон ключей) — пробуем по полному имени.
+    """
+    rows = await _get(
+        session, "teachers_visible_with_stats", _HDR, [
+            ("select", "id,full_name,slug,review_count,average_rating"),
+            ("slug", f"eq.{slug}"),
+            ("limit", "1"),
+        ],
+    )
+    if not rows and name:
+        rows = await _get(
+            session, "teachers_visible_with_stats", _HDR, [
+                ("select", "id,full_name,slug,review_count,average_rating"),
+                ("full_name", f"eq.{name}"),
+                ("limit", "1"),
+            ],
+        )
+    return rows[0] if rows else None
+
+
+async def fetch_teacher_reviews(
+    session: aiohttp.ClientSession, teacher_id: str, limit: int = 100
+) -> list[dict]:
+    """Одобренные отзывы о преподавателе, новые сверху.
+
+    Каждая строка: {overall_rating, review_text, created_at, tags[], criteria[]}.
+    """
+    return await _get(
+        session, "teacher_reviews_public", _HDR, [
+            ("select",
+             "overall_rating,review_text,created_at,"
+             "review_tag_selections(teacher_tags(name)),"
+             "review_criteria_ratings(rating,review_criteria(name))"),
+            ("teacher_id", f"eq.{teacher_id}"),
+            ("order", "created_at.desc"),
+            ("limit", str(limit)),
+        ],
+    )
+
+
 async def fetch_free_rooms(
     session: aiohttp.ClientSession,
     building: str,

@@ -15,9 +15,64 @@ def main_menu() -> InlineKeyboardMarkup:
     kb.button(text=t.BTN_BY_DATE, callback_data="schedule:date")
     kb.button(text=t.BTN_BY_RANGE, callback_data="schedule:range")
     kb.button(text=t.BTN_FREE_ROOMS, callback_data="rooms")
+    kb.button(text=t.BTN_REVIEWS, callback_data="reviews")
     kb.button(text=t.BTN_CHANGE_GROUP, callback_data="change_group")
     kb.button(text=t.BTN_SETTINGS, callback_data="settings")
-    kb.adjust(2, 1, 2, 1, 2)
+    kb.adjust(2, 1, 2, 2, 2)
+    return kb.as_markup()
+
+
+def review_search_results(results: list[dict]) -> InlineKeyboardMarkup:
+    """Кнопка на каждого найденного преподавателя (callback rv:t:{idx})."""
+    kb = InlineKeyboardBuilder()
+    for idx, item in enumerate(results[:10]):
+        kb.button(text=item["name"][:60], callback_data=f"rv:t:{idx}")
+    kb.button(text="🔍 Другой запрос", callback_data="reviews")
+    kb.button(text=t.BTN_MENU, callback_data="menu")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def review_card(has_reviews: bool) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    if has_reviews:
+        kb.button(text=t.BTN_SHOW_REVIEWS, callback_data="rv:go:0")
+    kb.button(text="🔍 Другой препод", callback_data="reviews")
+    kb.button(text=t.BTN_MENU, callback_data="menu")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def _page_window(pos: int, total: int, size: int = 5) -> list[int]:
+    if total <= size:
+        return list(range(total))
+    start = max(0, min(pos - size // 2, total - size))
+    return list(range(start, start + size))
+
+
+def review_pager(pos: int, total: int) -> InlineKeyboardMarkup:
+    """Листалка отзывов: стрелки + быстрый переход по номерам."""
+    kb = InlineKeyboardBuilder()
+    arrows = 0
+    if pos > 0:
+        kb.button(text="⬅️", callback_data=f"rv:go:{pos - 1}")
+        arrows += 1
+    kb.button(text=f"{pos + 1}/{total}", callback_data="rv:noop")
+    arrows += 1
+    if pos < total - 1:
+        kb.button(text="➡️", callback_data=f"rv:go:{pos + 1}")
+        arrows += 1
+
+    window = _page_window(pos, total)
+    for n in window:
+        if n == pos:
+            kb.button(text=f"·{n + 1}·", callback_data="rv:noop")
+        else:
+            kb.button(text=str(n + 1), callback_data=f"rv:go:{n}")
+
+    kb.button(text=t.BTN_TO_RATING, callback_data="rv:card")
+    kb.button(text=t.BTN_MENU, callback_data="menu")
+    kb.adjust(arrows, len(window), 2)
     return kb.as_markup()
 
 

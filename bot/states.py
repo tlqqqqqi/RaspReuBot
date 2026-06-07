@@ -18,3 +18,7 @@ class DateInput(StatesGroup):
 
 class RoomDate(StatesGroup):
     waiting_for_date = State()
+
+
+class ReviewSearch(StatesGroup):
+    waiting_for_query = State()

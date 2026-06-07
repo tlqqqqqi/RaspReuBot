@@ -10,7 +10,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from .config import load_config
 from .db import init_db
-from .handlers import date_schedule, menu, rooms, schedule, settings, start
+from .handlers import date_schedule, menu, reviews, rooms, schedule, settings, start
 from .scheduler import run_evening_job, run_morning_job, run_weekly_job
 
 logging.basicConfig(
@@ -33,6 +33,7 @@ async def main() -> None:
     dp.include_router(schedule.router)
     dp.include_router(date_schedule.router)
     dp.include_router(rooms.router)
+    dp.include_router(reviews.router)
     dp.include_router(settings.router)
 
     scheduler = AsyncIOScheduler(timezone=config.tz)

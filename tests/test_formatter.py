@@ -1,6 +1,13 @@
 from datetime import date
 
-from bot.formatter import format_day, format_free_rooms, format_range, format_week
+from bot.formatter import (
+    format_day,
+    format_free_rooms,
+    format_range,
+    format_review,
+    format_review_card,
+    format_week,
+)
 from bot.parser import Day, Lesson, Week
 
 
@@ -129,3 +136,38 @@ class TestFreeRooms:
         assert len(text) <= 4096
         assert f"Свободно: {len(rooms)}" in text
         assert "показаны не все" in text
+
+
+class TestReviews:
+    def test_card(self):
+        stats = {"full_name": "Иванов Иван Иванович", "average_rating": 4.766,
+                 "review_count": 80}
+        text = format_review_card(stats)
+        assert "Иванов Иван Иванович" in text
+        assert "4.77" in text
+        assert "80" in text
+
+    def test_review_with_text_and_date(self):
+        review = {"overall_rating": 5.0, "review_text": "Лучший препод!",
+                  "created_at": "2025-01-02T00:00:00+00:00",
+                  "review_tag_selections": [
+                      {"teacher_tags": {"name": "объясняет понятно"}}]}
+        text = format_review(review, 0, 80)
+        assert "Отзыв" in text and "1" in text and "80" in text
+        assert "Лучший препод!" in text
+        assert "02.01.2025" in text
+        assert "⭐" in text
+        assert "объясняет понятно" in text
+
+    def test_review_escapes_html(self):
+        review = {"overall_rating": 3, "review_text": "<b>зло</b> & <script>",
+                  "created_at": "2025-01-01T00:00:00+00:00"}
+        text = format_review(review, 1, 2)
+        assert "<b>зло</b>" not in text
+        assert "&lt;b&gt;" in text
+        assert "&amp;" in text
+
+    def test_review_empty_text(self):
+        review = {"overall_rating": 4, "review_text": "", "created_at": None}
+        text = format_review(review, 0, 1)
+        assert "без текста" in text
