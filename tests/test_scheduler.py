@@ -48,7 +48,7 @@ class TestSendAndPin:
         bot, msg = _make_bot()
         with patch("bot.scheduler.upsert_user", new_callable=AsyncMock):
             await _send_and_pin(bot, "/tmp/test.db", _user(pin_id=111), "текст", "last_morning_pin_id")
-        bot.unpin_chat_message.assert_called_once_with(123, 111)
+        bot.unpin_chat_message.assert_called_once_with(123, message_id=111)
         bot.pin_chat_message.assert_called_once()
 
     @pytest.mark.asyncio

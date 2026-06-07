@@ -55,7 +55,9 @@ async def _send_and_pin(
     logger.debug("Unpin attempt: chat_id=%s field=%s old_pin_id=%s", chat_id, pin_field, old_pin_id)
     if old_pin_id:
         try:
-            await bot.unpin_chat_message(chat_id, old_pin_id)
+            # message_id обязательно именованным: 2-й позиционный аргумент в
+            # aiogram 3 — business_connection_id, а не message_id.
+            await bot.unpin_chat_message(chat_id, message_id=old_pin_id)
             logger.info("Unpinned msg=%s in chat=%s", old_pin_id, chat_id)
         except TelegramBadRequest:
             pass  # сообщение уже удалено или не было закреплено
