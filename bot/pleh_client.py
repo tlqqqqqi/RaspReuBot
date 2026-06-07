@@ -96,11 +96,14 @@ async def search(session: aiohttp.ClientSession, query: str) -> list[dict]:
         )
         for tch in teachers:
             deps = tch.get("departments") or []
+            # departments может содержать null'ы — отфильтровываем (иначе join падает).
+            clean = [d for d in deps if isinstance(d, str) and d.strip()] \
+                if isinstance(deps, list) else []
             results.append({
                 "name": tch["teacher_name"],
                 "key": tch["teacher_slug"],
                 "kind": "teacher",
-                "metadata": ", ".join(deps) if isinstance(deps, list) else "",
+                "metadata": ", ".join(clean),
             })
     except Exception:
         logger.exception("pleh: поиск преподавателей не удался для %r", query)
