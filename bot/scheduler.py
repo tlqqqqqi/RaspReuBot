@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -9,42 +8,28 @@ from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest
 
 from .db import get_users_for_notification, upsert_user
 from .formatter import format_day, format_week
-from .parser import Day, parse_html
-from .rea_client import fetch_details, fetch_week
+from .parser import Week
+from . import provider
 
 logger = logging.getLogger(__name__)
 
 
 async def _fetch_day(
     session: aiohttp.ClientSession,
-    selection_key: str,
-    target: datetime.date,
+    db_path: str,
+    user: dict,
+    target: "datetime.date",
 ) -> str | None:
     """Return formatted day text, or None on error."""
     try:
-        html = await fetch_week(session, selection_key, week_num=-1)
-        week = parse_html(html)
-        day = week.day_by_date(target)
-
-        if day is None and week.week_num > 0:
-            html2 = await fetch_week(session, selection_key, week_num=week.week_num + 1)
-            week2 = parse_html(html2)
-            day = week2.day_by_date(target)
-
-        _WEEKDAYS = ["ПОНЕДЕЛЬНИК", "ВТОРНИК", "СРЕДА", "ЧЕТВЕРГ", "ПЯТНИЦА", "СУББОТА", "ВОСКРЕСЕНЬЕ"]
-        if day is None:
-            day = Day(date=target, weekday=_WEEKDAYS[target.weekday()], lessons=[])
-        else:
-            details = await asyncio.gather(
-                *(fetch_details(session, selection_key, day.date, l.pair_num) for l in day.lessons),
-                return_exceptions=True,
-            )
-            for lesson, result in zip(day.lessons, details):
-                if isinstance(result, list):
-                    lesson.subgroups = result
+        days = await provider.get_days(session, db_path, user, target, target)
+        day = provider.stub_days(days, [target])[0]
         return format_day(day)
     except Exception:
-        logger.exception("Error fetching schedule for key=%r target=%s", selection_key, target)
+        logger.exception(
+            "Error fetching schedule for chat_id=%s target=%s",
+            user.get("chat_id"), target,
+        )
         return None
 
 
@@ -100,7 +85,7 @@ async def run_morning_job(
     logger.info("Morning job: sending to %d users at %s", len(users), current_time)
     today = now.date()
     for user in users:
-        text = await _fetch_day(session, user["selection_key"], today)
+        text = await _fetch_day(session, db_path, user, today)
         if text:
             await _send_and_pin(bot, db_path, user, text, "last_morning_pin_id")
 
@@ -116,7 +101,7 @@ async def run_evening_job(
     logger.info("Evening job: sending to %d users at %s", len(users), current_time)
     tomorrow = now.date() + timedelta(days=1)
     for user in users:
-        text = await _fetch_day(session, user["selection_key"], tomorrow)
+        text = await _fetch_day(session, db_path, user, tomorrow)
         if not text:
             continue
         chat_id = user["chat_id"]
@@ -142,30 +127,19 @@ async def run_weekly_job(
         return
     logger.info("Weekly job: sending to %d users at %s", len(users), current_time)
 
+    # Предстоящая неделя: ближайший понедельник .. воскресенье (сегодня вс).
+    today = now.date()
+    monday = today + timedelta(days=7 - today.weekday())
+    week_dates = [monday + timedelta(days=i) for i in range(7)]
+
     for user in users:
-        selection_key = user["selection_key"]
         try:
-            # В воскресенье week_num=-1 уже отдаёт предстоящую неделю
-            html = await fetch_week(session, selection_key, week_num=-1)
-            next_week = parse_html(html)
-
-            details = await asyncio.gather(
-                *(
-                    fetch_details(session, selection_key, day.date, lesson.pair_num)
-                    for day in next_week.days
-                    for lesson in day.lessons
-                ),
-                return_exceptions=True,
-            )
-            lessons_flat = [lesson for day in next_week.days for lesson in day.lessons]
-            for lesson, result in zip(lessons_flat, details):
-                if isinstance(result, list):
-                    lesson.subgroups = result
-
-            name = user["selection_name"] or selection_key
-            text = format_week(next_week, name)
+            days = await provider.get_days(session, db_path, user, monday, week_dates[-1])
+            full = provider.stub_days(days, week_dates)
+            name = user["selection_name"] or user["selection_key"]
+            text = format_week(Week(week_num=0, days=full), name)
         except Exception:
-            logger.exception("Error fetching weekly schedule for key=%r", selection_key)
+            logger.exception("Error fetching weekly schedule for chat_id=%s", user.get("chat_id"))
             continue
 
         chat_id = user["chat_id"]

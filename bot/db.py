@@ -5,6 +5,8 @@ CREATE TABLE IF NOT EXISTS users (
     chat_id             INTEGER PRIMARY KEY,
     selection_key       TEXT,
     selection_name      TEXT,
+    selection_kind      TEXT,
+    -- 'group' | 'teacher' | NULL (старые юзеры, до-резолвятся лениво)
     morning_enabled     INTEGER NOT NULL DEFAULT 1,
     morning_time        TEXT    NOT NULL DEFAULT '07:00',
     evening_enabled     INTEGER NOT NULL DEFAULT 0,
@@ -21,6 +23,7 @@ CREATE TABLE IF NOT EXISTS users (
 _MIGRATIONS = [
     "ALTER TABLE users ADD COLUMN weekly_enabled INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE users ADD COLUMN weekly_time TEXT NOT NULL DEFAULT '18:00'",
+    "ALTER TABLE users ADD COLUMN selection_kind TEXT",
 ]
 
 

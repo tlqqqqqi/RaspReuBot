@@ -88,7 +88,7 @@ class TestMorningJob:
 
         captured_dates = []
 
-        async def fake_fetch_day(session, key, target):
+        async def fake_fetch_day(session, db_path, user, target):
             captured_dates.append(target)
             return "расписание"
 

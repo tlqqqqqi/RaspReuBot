@@ -10,18 +10,13 @@ from aiogram.types import CallbackQuery, Message
 from ..db import get_user
 from ..formatter import format_day, format_range
 from ..keyboards import cancel_input, main_menu
-from ..parser import Day, parse_html
-from ..rea_client import fetch_details, fetch_week
 from ..states import DateInput
+from .. import provider
 from .. import texts as t
 
 logger = logging.getLogger(__name__)
 router = Router()
 
-_WEEKDAY_NAMES = [
-    "ПОНЕДЕЛЬНИК", "ВТОРНИК", "СРЕДА", "ЧЕТВЕРГ",
-    "ПЯТНИЦА", "СУББОТА", "ВОСКРЕСЕНЬЕ",
-]
 _DATE_RE = re.compile(r"^(\d{1,2})\.(\d{1,2})(?:\.(\d{4}))?$")
 
 
@@ -49,75 +44,6 @@ def _parse_range(s: str) -> tuple[date, date] | None:
     if d1 > d2:
         d1, d2 = d2, d1
     return d1, d2
-
-
-async def _fetch_days(
-    session: aiohttp.ClientSession,
-    selection_key: str,
-    dates: list[date],
-) -> list[Day]:
-    """Fetch Day objects for each requested date, filling stubs where no lesson data exists."""
-    weeks: dict[int, object] = {}
-
-    html = await fetch_week(session, selection_key, week_num=-1)
-    base_week = parse_html(html)
-    if base_week.week_num > 0:
-        weeks[base_week.week_num] = base_week
-
-    ref_date = base_week.days[0].date if base_week.days else date.today()
-    ref_wn = base_week.week_num
-
-    result: list[Day] = []
-    for target in dates:
-        day = None
-
-        for week in weeks.values():
-            day = week.day_by_date(target)
-            if day:
-                break
-
-        if day is None and ref_wn > 0:
-            delta = (target - ref_date).days
-            for offset in [delta // 7, delta // 7 + 1, delta // 7 - 1]:
-                wn = ref_wn + offset
-                if wn <= 0:
-                    continue
-                if wn not in weeks:
-                    html2 = await fetch_week(session, selection_key, week_num=wn)
-                    w2 = parse_html(html2)
-                    if w2.week_num > 0:
-                        weeks[w2.week_num] = w2
-                day = weeks.get(wn)
-                if day is not None:
-                    day = day.day_by_date(target)
-                if day:
-                    break
-
-        if day is None:
-            day = Day(date=target, weekday=_WEEKDAY_NAMES[target.weekday()], lessons=[])
-
-        result.append(day)
-
-    return result
-
-
-async def _enrich(
-    session: aiohttp.ClientSession,
-    selection_key: str,
-    days: list[Day],
-) -> None:
-    import asyncio
-    tasks, lessons_flat = [], []
-    for day in days:
-        for lesson in day.lessons:
-            tasks.append(fetch_details(session, selection_key, day.date, lesson.pair_num))
-            lessons_flat.append(lesson)
-    if not tasks:
-        return
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    for lesson, result in zip(lessons_flat, results):
-        if isinstance(result, list):
-            lesson.subgroups = result
 
 
 # ── Callbacks that enter FSM ──────────────────────────────────────────────────
@@ -168,9 +94,8 @@ async def handle_date_input(
     loading = await message.answer(t.SCHEDULE_LOADING)
 
     try:
-        days = await _fetch_days(session, user["selection_key"], [target])
-        await _enrich(session, user["selection_key"], days)
-        text = format_day(days[0])
+        days = await provider.get_days(session, db_path, user, target, target)
+        text = format_day(provider.stub_days(days, [target])[0])
     except Exception:
         logger.exception("Failed to fetch date schedule for chat_id=%s", message.from_user.id)
         text = t.SCHEDULE_ERROR
@@ -206,10 +131,9 @@ async def handle_range_input(
 
     dates = [start + timedelta(days=i) for i in range((end - start).days + 1)]
     try:
-        days = await _fetch_days(session, user["selection_key"], dates)
-        await _enrich(session, user["selection_key"], days)
+        days = await provider.get_days(session, db_path, user, start, end)
         name = user["selection_name"] or user["selection_key"]
-        text = format_range(days, name)
+        text = format_range(provider.stub_days(days, dates), name)
     except Exception:
         logger.exception("Failed to fetch range schedule for chat_id=%s", message.from_user.id)
         text = t.SCHEDULE_ERROR

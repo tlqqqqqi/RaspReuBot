@@ -8,7 +8,7 @@ from aiogram.types import CallbackQuery, Message
 
 from ..db import get_user, upsert_user
 from ..keyboards import cancel_input, main_menu, search_results
-from ..rea_client import search
+from ..provider import search
 from ..states import GroupSelection
 from .. import texts as t
 
@@ -100,6 +100,7 @@ async def cb_pick_result(
         callback.from_user.id,
         selection_key=item["key"],
         selection_name=item["name"],
+        selection_kind=item.get("kind"),
     )
     await state.clear()
 
