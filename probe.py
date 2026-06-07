@@ -1,4 +1,4 @@
-"""Проверка обхода капчи rasp.rea.ru через прокси: заглушка -> /refresh -> повтор.
+"""Обход капчи rasp.rea.ru как браузер: ждём -> ОДИН /refresh -> reload'ы.
 
 Через прокси:  REA_PROXY=http://127.0.0.1:10809 .venv/bin/python probe.py
 """
@@ -9,7 +9,7 @@ import sqlite3
 import aiohttp
 
 BASE = "https://rasp.rea.ru"
-HEADERS = {"X-Requested-With": "XMLHttpRequest"}
+HEADERS = {"X-Requested-With": "XMLHttpRequest", "Referer": BASE + "/"}
 
 
 async def get_card(session, key, proxy):
@@ -33,31 +33,40 @@ async def main() -> None:
     print("ключ:", repr(key))
 
     async with aiohttp.ClientSession() as session:
-        for attempt in range(1, 6):
-            status, body = await get_card(session, key, proxy)
-            is_sched = 'id="weekNum"' in body
-            cookies = [c.key for c in session.cookie_jar]
-            print(f"\nпопытка {attempt}: status={status} len={len(body)} "
-                  f"расписание={is_sched} cookies={cookies}")
+        status, body = await get_card(session, key, proxy)
+        if 'id="weekNum"' in body:
+            print(f"сразу OK: status={status} len={len(body)} расписание=True")
+            print(">>> УСПЕХ (капчи не было)")
+            return
 
-            if is_sched:
-                print(">>> УСПЕХ: капча пройдена, расписание получено")
+        print(f"капча: status={status} len={len(body)}")
+
+        # как браузер: подождать 5с, затем ОДИН раз /refresh
+        print("ждём 5с (как setTimeout на странице)...")
+        await asyncio.sleep(5)
+        try:
+            async with session.get(
+                BASE + "/refresh", headers=HEADERS, proxy=proxy,
+                timeout=aiohttp.ClientTimeout(total=20),
+            ) as r:
+                await r.read()
+                print(f"GET /refresh -> {r.status} "
+                      f"Set-Cookie={r.headers.get('Set-Cookie')}")
+        except Exception as e:
+            print(f"GET /refresh ОШИБКА: {type(e).__name__}: {e}")
+
+        # reload'ы с cookie, БЕЗ повторного /refresh
+        for i in range(1, 5):
+            await asyncio.sleep(3)
+            status, body = await get_card(session, key, proxy)
+            ok = 'id="weekNum"' in body
+            print(f"reload {i}: status={status} len={len(body)} "
+                  f"расписание={ok} cookies={[c.key for c in session.cookie_jar]}")
+            if ok:
+                print(">>> УСПЕХ: капча пройдена через /refresh")
                 return
 
-            try:
-                async with session.get(
-                    BASE + "/refresh", headers=HEADERS, proxy=proxy,
-                    timeout=aiohttp.ClientTimeout(total=20),
-                ) as r:
-                    await r.read()
-                    print(f"   GET /refresh -> {r.status} "
-                          f"Set-Cookie={r.headers.get('Set-Cookie')}")
-            except Exception as e:
-                print(f"   GET /refresh ОШИБКА: {type(e).__name__}: {e}")
-
-            await asyncio.sleep(2)
-
-        print(">>> НЕ УДАЛОСЬ пройти капчу за 5 попыток")
+        print(">>> НЕ УДАЛОСЬ пройти капчу")
 
 
 if __name__ == "__main__":
