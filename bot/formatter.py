@@ -112,9 +112,20 @@ def format_free_rooms(
     for r in rooms:
         by_floor.setdefault(r.get("floor"), []).append(r)
 
+    # В выходные/праздники свободны почти все аудитории (90+), и список вылезает
+    # за лимит Telegram (4096). Обрезаем с запасом и дописываем счётчик остатка.
+    max_len = 3900
     parts = [f"{header}\nСвободно: {len(rooms)}"]
+    length = len(parts[0])
+    shown = 0
+    truncated = False
     for floor in sorted(by_floor, key=lambda x: (x is None, x)):
-        parts.append(f"\n<b>{_floor_label(floor)}</b>")
+        head = f"\n<b>{_floor_label(floor)}</b>"
+        if length + len(head) > max_len:
+            truncated = True
+            break
+        parts.append(head)
+        length += len(head)
         for r in by_floor[floor]:
             extra = []
             if r.get("capacity"):
@@ -125,7 +136,17 @@ def format_free_rooms(
             line = f"• {r.get('room_number')}"
             if extra:
                 line += " — " + ", ".join(extra)
+            if length + len(line) + 1 > max_len:
+                truncated = True
+                break
             parts.append(line)
+            length += len(line) + 1
+            shown += 1
+        if truncated:
+            break
+
+    if truncated:
+        parts.append(f"\n…и ещё {len(rooms) - shown} (показаны не все).")
     return "\n".join(parts)
 
 

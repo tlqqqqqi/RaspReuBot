@@ -118,3 +118,14 @@ class TestFreeRooms:
     def test_empty(self):
         text = format_free_rooms("9 корпус", date(2026, 6, 9), 1, [])
         assert "Свободных аудиторий нет" in text
+
+    def test_truncates_under_telegram_limit(self):
+        rooms = [
+            {"room_number": f"{floor}{n:02d}", "floor": floor, "capacity": 30,
+             "room_category": "Общего назначения (мультимедийная)"}
+            for floor in range(1, 8) for n in range(1, 30)
+        ]
+        text = format_free_rooms("3 корпус", date(2026, 6, 7), 1, rooms)
+        assert len(text) <= 4096
+        assert f"Свободно: {len(rooms)}" in text
+        assert "показаны не все" in text

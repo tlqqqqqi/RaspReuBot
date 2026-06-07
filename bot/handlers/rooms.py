@@ -112,10 +112,10 @@ async def cb_period(callback: CallbackQuery, session: aiohttp.ClientSession) -> 
     try:
         rooms = await pleh.fetch_free_rooms(session, building, target, period)
         text = format_free_rooms(building, target, period, rooms)
+        await loading.edit_text(text, parse_mode="HTML", reply_markup=main_menu())
     except Exception:
         logger.exception(
             "Failed to fetch free rooms building=%s date=%s period=%s",
             building, target, period,
         )
-        text = t.SCHEDULE_ERROR
-    await loading.edit_text(text, parse_mode="HTML", reply_markup=main_menu())
+        await loading.edit_text(t.SCHEDULE_ERROR, reply_markup=main_menu())
