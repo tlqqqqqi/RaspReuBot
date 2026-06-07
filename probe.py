@@ -1,37 +1,48 @@
-"""Быстрая проверка: отдаёт ли rasp.rea.ru расписание или капчу.
+"""Проверка нового источника (pleh.tech) с этого сервера.
 
-Напрямую:      .venv/bin/python probe.py
-Через прокси:  REA_PROXY=http://127.0.0.1:10809 .venv/bin/python probe.py
+Берёт первого пользователя из bot.db, ищет его в pleh по сохранённому имени
+и печатает расписание на сегодня. Только чтение, БД не меняет.
+
+Запуск:  .venv/bin/python probe.py
 """
 import asyncio
-import os
 import sqlite3
+import ssl
+from datetime import date, timedelta
 
 import aiohttp
+import certifi
 
-BASE = "https://rasp.rea.ru"
-HEADERS = {"X-Requested-With": "XMLHttpRequest"}
+from bot import pleh_client as p
+from bot.formatter import format_day
+from bot.provider import stub_days
 
 
 async def main() -> None:
-    proxy = os.getenv("REA_PROXY") or None
-    print("прокси:", proxy or "нет (напрямую)")
-    key = [r[0] for r in sqlite3.connect("bot.db").execute(
-        "SELECT selection_key FROM users")][0]
-    print("ключ:", repr(key))
+    row = sqlite3.connect("bot.db").execute(
+        "SELECT selection_name, selection_key FROM users "
+        "WHERE selection_name IS NOT NULL LIMIT 1"
+    ).fetchone()
+    if not row:
+        print("в bot.db нет пользователей с выбором")
+        return
+    name = row[0]
+    print("проверяю по имени:", repr(name))
 
-    async with aiohttp.ClientSession() as session:
-        async with session.get(
-            BASE + "/Schedule/ScheduleCard",
-            params={"selection": key, "weekNum": -1, "catfilter": ""},
-            headers=HEADERS, proxy=proxy,
-            timeout=aiohttp.ClientTimeout(total=20),
-        ) as r:
-            body = await r.text()
-
-    ok = 'id="weekNum"' in body
-    print(f"status={r.status} len={len(body)} расписание={ok}")
-    print(">>> OK: расписание" if ok else ">>> КАПЧА")
+    ctx = ssl.create_default_context(cafile=certifi.where())
+    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=ctx)) as s:
+        found = await p.search(s, name)
+        print(f"pleh нашёл вариантов: {len(found)}")
+        match = next((f for f in found if f["name"].strip().lower() == name.strip().lower()),
+                     found[0] if found else None)
+        if not match:
+            print(">>> ПУСТО: pleh не нашёл — проверь доступность Supabase с сервера")
+            return
+        print("совпадение:", match["kind"], "|", match["name"])
+        today = date.today()
+        days = await p.fetch_days(s, match["key"], match["kind"], today, today + timedelta(days=6))
+        print(f">>> OK: pleh отдал {sum(len(d.lessons) for d in days)} занятий за неделю")
+        print(format_day(stub_days(days, [today])[0])[:400])
 
 
 if __name__ == "__main__":
