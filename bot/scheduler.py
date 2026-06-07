@@ -59,8 +59,11 @@ async def _send_and_pin(
             logger.info("Unpinned msg=%s in chat=%s", old_pin_id, chat_id)
         except TelegramBadRequest:
             pass  # сообщение уже удалено или не было закреплено
-        except Exception:
-            logger.warning("Could not unpin msg=%s in chat=%s", old_pin_id, chat_id)
+        except Exception as e:
+            logger.warning(
+                "Could not unpin msg=%s in chat=%s: %s: %s",
+                old_pin_id, chat_id, type(e).__name__, e,
+            )
 
     try:
         await bot.pin_chat_message(chat_id, msg.message_id, disable_notification=True)
