@@ -1,6 +1,6 @@
 from datetime import date
 
-from bot.formatter import format_day, format_range, format_week
+from bot.formatter import format_day, format_free_rooms, format_range, format_week
 from bot.parser import Day, Lesson, Week
 
 
@@ -90,3 +90,31 @@ class TestFormatWeek:
         text = format_week(week, "Группа123")
         assert "Группа123" in text
         assert "Математика" in text
+
+
+class TestFreeRooms:
+    def _rooms(self):
+        return [
+            {"room_number": "305", "floor": 3, "capacity": 30,
+             "room_category": "Общего назначения"},
+            {"room_number": "101", "floor": 1, "capacity": 40,
+             "room_category": "Мультимедийная"},
+            {"room_number": "310", "floor": 3, "capacity": None,
+             "room_category": None},
+        ]
+
+    def test_groups_by_floor(self):
+        text = format_free_rooms("3 корпус", date(2026, 6, 9), 2, self._rooms())
+        assert "3 корпус" in text
+        assert "2 пара (10:10–11:40)" in text
+        assert "Свободно: 3" in text
+        assert "1 этаж" in text and "3 этаж" in text
+        # этаж 1 идёт раньше этажа 3
+        assert text.index("1 этаж") < text.index("3 этаж")
+        assert "• 101 — 40 мест, Мультимедийная" in text
+        # пустые capacity/category не ломают строку
+        assert "• 310" in text
+
+    def test_empty(self):
+        text = format_free_rooms("9 корпус", date(2026, 6, 9), 1, [])
+        assert "Свободных аудиторий нет" in text

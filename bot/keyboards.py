@@ -1,7 +1,10 @@
+from datetime import date
+
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from . import texts as t
+from .pleh_client import FREE_ROOM_BUILDINGS, PERIOD_TIMES
 
 
 def main_menu() -> InlineKeyboardMarkup:
@@ -11,9 +14,40 @@ def main_menu() -> InlineKeyboardMarkup:
     kb.button(text=t.BTN_WEEK, callback_data="schedule:week")
     kb.button(text=t.BTN_BY_DATE, callback_data="schedule:date")
     kb.button(text=t.BTN_BY_RANGE, callback_data="schedule:range")
+    kb.button(text=t.BTN_FREE_ROOMS, callback_data="rooms")
     kb.button(text=t.BTN_CHANGE_GROUP, callback_data="change_group")
     kb.button(text=t.BTN_SETTINGS, callback_data="settings")
-    kb.adjust(2, 1, 2, 2)
+    kb.adjust(2, 1, 2, 1, 2)
+    return kb.as_markup()
+
+
+def free_room_buildings() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    for idx, building in enumerate(FREE_ROOM_BUILDINGS):
+        kb.button(text=building, callback_data=f"rm:b:{idx}")
+    kb.button(text=t.BTN_BACK, callback_data="menu")
+    kb.adjust(3, 3, 1, 1)
+    return kb.as_markup()
+
+
+def free_room_days(bidx: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=t.BTN_TODAY, callback_data=f"rm:d:{bidx}:today")
+    kb.button(text=t.BTN_TOMORROW, callback_data=f"rm:d:{bidx}:tom")
+    kb.button(text=t.BTN_BY_DATE, callback_data=f"rm:d:{bidx}:date")
+    kb.button(text=t.BTN_BACK, callback_data="rooms")
+    kb.adjust(2, 1, 1)
+    return kb.as_markup()
+
+
+def free_room_periods(bidx: int, target: date) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    ymd = target.strftime("%Y%m%d")
+    for n in range(1, 9):
+        start, _ = PERIOD_TIMES[n]
+        kb.button(text=f"{n} пара · {start}", callback_data=f"rm:p:{bidx}:{ymd}:{n}")
+    kb.button(text=t.BTN_BACK, callback_data=f"rm:b:{bidx}")
+    kb.adjust(2, 2, 2, 2, 1)
     return kb.as_markup()
 
 

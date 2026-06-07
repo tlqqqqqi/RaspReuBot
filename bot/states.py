@@ -14,3 +14,7 @@ class TimeSelection(StatesGroup):
 class DateInput(StatesGroup):
     waiting_for_date = State()
     waiting_for_range = State()
+
+
+class RoomDate(StatesGroup):
+    waiting_for_date = State()

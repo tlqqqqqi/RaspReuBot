@@ -49,6 +49,16 @@ _WEEKDAYS = [
     "ПЯТНИЦА", "СУББОТА", "ВОСКРЕСЕНЬЕ",
 ]
 
+# Публичный алиас — нужен форматтеру/клавиатурам для подписи времени пары.
+PERIOD_TIMES = _PERIOD_TIMES
+
+# Корпуса со свободными аудиториями (значения совпадают с полем building во
+# вьюхе free_slots_current). Стабильны; если pleh добавит корпус — дописать сюда.
+FREE_ROOM_BUILDINGS = [
+    "1 корпус", "2 корпус", "3 корпус", "4 корпус",
+    "6 корпус", "8 корпус", "9 корпус",
+]
+
 
 async def _get(session, path, headers, params):
     # params — список (key, value): допускает повторяющиеся ключи (day=gte&day=lte).
@@ -197,3 +207,25 @@ async def fetch_days(
         ],
     )
     return _rows_to_days(rows, is_teacher)
+
+
+async def fetch_free_rooms(
+    session: aiohttp.ClientSession,
+    building: str,
+    target: date,
+    period: int,
+) -> list[dict]:
+    """Свободные аудитории корпуса на дату/пару.
+
+    Возвращает строки {room_number, floor, capacity, room_category},
+    отсортированные по этажу и номеру. Логин не нужен — вьюха публичная.
+    """
+    return await _get(
+        session, "free_slots_current", _HDR_API, [
+            ("select", "room_number,floor,capacity,room_category"),
+            ("building", f"eq.{building}"),
+            ("date_slot", f"eq.{target.isoformat()}"),
+            ("period_number", f"eq.{period}"),
+            ("order", "floor.asc,room_number.asc"),
+        ],
+    )

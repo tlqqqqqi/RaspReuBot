@@ -1,6 +1,7 @@
 from datetime import date
 
 from .parser import Day, Lesson, SubgroupInfo, Week
+from .pleh_client import PERIOD_TIMES
 
 _WEEKDAY_RU = {
     "ПОНЕДЕЛЬНИК": "Понедельник",
@@ -17,12 +18,22 @@ _MONTH_RU = {
     9: "сентября", 10: "октября", 11: "ноября", 12: "декабря",
 }
 
+_WEEKDAY_BY_NUM = [
+    "Понедельник", "Вторник", "Среда", "Четверг",
+    "Пятница", "Суббота", "Воскресенье",
+]
+
 _SEP = "—" * 15
 
 
 def _date_str(d: date, weekday: str) -> str:
     name = _WEEKDAY_RU.get(weekday, weekday.capitalize())
     return f"{name}, {d.day} {_MONTH_RU[d.month]} {d.year}"
+
+
+def _date_full(d: date) -> str:
+    """Дата с днём недели, вычисленным из самой даты (для свободных аудиторий)."""
+    return f"{_WEEKDAY_BY_NUM[d.weekday()]}, {d.day} {_MONTH_RU[d.month]} {d.year}"
 
 
 def _subgroup_lines(sg: SubgroupInfo) -> list[str]:
@@ -76,6 +87,46 @@ def format_range(days: list[Day], selection_name: str) -> str:
     for day in days:
         parts.append(format_day(day))
     return "\n\n".join(parts)
+
+
+def _floor_label(floor) -> str:
+    if floor is None:
+        return "Этаж не указан"
+    return f"{floor} этаж"
+
+
+def format_free_rooms(
+    building: str, target: date, period: int, rooms: list[dict]
+) -> str:
+    start, end = PERIOD_TIMES.get(period, ("", ""))
+    when = _date_full(target)
+    header = (
+        f"🚪 <b>Свободные аудитории</b>\n"
+        f"{building} · {when}\n"
+        f"{period} пара ({start}–{end})"
+    )
+    if not rooms:
+        return f"{header}\n\nСвободных аудиторий нет."
+
+    by_floor: dict = {}
+    for r in rooms:
+        by_floor.setdefault(r.get("floor"), []).append(r)
+
+    parts = [f"{header}\nСвободно: {len(rooms)}"]
+    for floor in sorted(by_floor, key=lambda x: (x is None, x)):
+        parts.append(f"\n<b>{_floor_label(floor)}</b>")
+        for r in by_floor[floor]:
+            extra = []
+            if r.get("capacity"):
+                extra.append(f"{r['capacity']} мест")
+            cat = (r.get("room_category") or "").strip()
+            if cat:
+                extra.append(cat)
+            line = f"• {r.get('room_number')}"
+            if extra:
+                line += " — " + ", ".join(extra)
+            parts.append(line)
+    return "\n".join(parts)
 
 
 def format_week(week: Week, selection_name: str) -> str:
