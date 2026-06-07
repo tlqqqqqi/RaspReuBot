@@ -126,6 +126,15 @@ def _parse_slot(slot: Tag) -> Lesson | None:
     )
 
 
+def looks_like_schedule(html: str) -> bool:
+    """True, если ответ похож на карточку расписания.
+
+    У валидного ответа ScheduleCard всегда есть скрытый input#weekNum.
+    У анти-бот заглушки («Просто убедимся, что Вы не робот») его нет.
+    """
+    return BeautifulSoup(html, "lxml").find("input", id="weekNum") is not None
+
+
 def parse_html(html: str) -> Week:
     soup = BeautifulSoup(html, "lxml")
 

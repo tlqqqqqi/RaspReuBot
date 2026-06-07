@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 from datetime import date
 
 import aiohttp
@@ -18,6 +19,20 @@ _BASE = "https://rasp.rea.ru"
 _HEADERS = {"X-Requested-With": "XMLHttpRequest"}
 _sem = asyncio.Semaphore(5)
 
+# Сайт режет IP некоторых хостингов анти-бот заглушкой. Если задан REA_PROXY
+# (HTTP-прокси, напр. http://127.0.0.1:10809), запросы к сайту идут через него.
+# Пусто → ходим напрямую (поведение по умолчанию).
+_INTERSTITIAL_ATTEMPTS = 2
+_INTERSTITIAL_WAIT = 3
+
+
+class InterstitialError(RuntimeError):
+    """rasp.rea.ru вернул анти-бот заглушку вместо расписания."""
+
+
+def _proxy() -> str | None:
+    return os.getenv("REA_PROXY") or None
+
 _retry = retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=1, max=10),
@@ -33,6 +48,7 @@ async def search(session: aiohttp.ClientSession, query: str) -> list[dict]:
             f"{_BASE}/Schedule/SearchBarSuggestions",
             params={"searchFor": query},
             headers=_HEADERS,
+            proxy=_proxy(),
             timeout=aiohttp.ClientTimeout(total=10),
         ) as resp:
             resp.raise_for_status()
@@ -96,6 +112,7 @@ async def fetch_details(
                     "timeSlot": pair_num,
                 },
                 headers=_HEADERS,
+                proxy=_proxy(),
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
                 if resp.status != 200:
@@ -110,16 +127,11 @@ async def fetch_details(
 
 
 @_retry
-async def fetch_week(
+async def _fetch_week_once(
     session: aiohttp.ClientSession,
     selection_key: str,
-    week_num: int = -1,
+    week_num: int,
 ) -> str:
-    """Fetch schedule HTML for a given week.
-
-    week_num=-1 means current academic week (site default).
-    Positive values are absolute academic week numbers.
-    """
     async with _sem:
         async with session.get(
             f"{_BASE}/Schedule/ScheduleCard",
@@ -129,7 +141,43 @@ async def fetch_week(
                 "catfilter": "",
             },
             headers=_HEADERS,
+            proxy=_proxy(),
             timeout=aiohttp.ClientTimeout(total=15),
         ) as resp:
             resp.raise_for_status()
             return await resp.text()
+
+
+async def fetch_week(
+    session: aiohttp.ClientSession,
+    selection_key: str,
+    week_num: int = -1,
+) -> str:
+    """Fetch schedule HTML for a given week.
+
+    week_num=-1 means current academic week (site default).
+    Positive values are absolute academic week numbers.
+
+    Raises InterstitialError if the site keeps returning the anti-bot stub
+    page instead of a schedule (so callers show an honest error instead of a
+    misleading "Занятий нет"). See REA_PROXY for the network-level fix.
+    """
+    from .parser import looks_like_schedule
+
+    for attempt in range(_INTERSTITIAL_ATTEMPTS):
+        html = await _fetch_week_once(session, selection_key, week_num)
+        if looks_like_schedule(html):
+            return html
+        logger.warning(
+            "rasp.rea.ru вернул заглушку (не расписание) key=%r week=%s, попытка %d/%d",
+            selection_key,
+            week_num,
+            attempt + 1,
+            _INTERSTITIAL_ATTEMPTS,
+        )
+        if attempt < _INTERSTITIAL_ATTEMPTS - 1:
+            await asyncio.sleep(_INTERSTITIAL_WAIT)
+
+    raise InterstitialError(
+        f"interstitial (anti-bot stub) for {selection_key!r} week={week_num}"
+    )

@@ -1,0 +1,19 @@
+<!doctype html>
+<html class="page" lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="robots" content="noindex">
+    <title>РЭУ.РФ</title>
+</head>
+<body>
+<div class="captcha">
+    <h1 class="captcha__title">Просто убедимся,<br>что Вы не робот :)</h1>
+    <script>
+        setTimeout(function(){
+            $.ajax({type:"get",url:"/refresh",success:function(){window.location.reload();}});
+            setTimeout(function(){window.location.reload();},2000);
+        }, 5000);
+    </script>
+</div>
+</body>
+</html>

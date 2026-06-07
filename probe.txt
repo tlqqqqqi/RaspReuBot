@@ -1,0 +1,37 @@
+GNU nano 6.2                         probe.txt
+ключей в базе: 21
+
+КЛЮЧ '15.25д-муф01/25б'
+  status=200 len=17276 расписание=False
+  сохранено -> dump_0.html
+  --- первые 1200 символов ответа ---
+
+<!doctype html>
+<html class="page" lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maxim>
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <meta name="keywords" content="">
+    <meta name="description" content="">
+    <meta name="robots" content="noindex">
+    <meta name="page_type" content="np-template-header-footer-from-plugin">
+    <title>РЭУ.РФ</title>
+    <link rel="stylesheet" href="/assets/font-awesome.min.css">
+    <link href="/assets/favicon.svg" rel="apple-touch-icon">
+    <link href="/assets/favicon.svg" rel="shortcut icon">
+
+<!-- Top.Mail.Ru counter -->
+<script type="text/javascript">
+var _tmr = window._tmr || (window._tmr = []);
+_tmr.push({id: "3590945", type: "pageView", start: (new Date()).getTime()});
+(function (d, w, id) {
+  if (d.getElementById(id)) return;
+  var ts = d.createElement("script"); ts.type = "text/javascript"; ts.async = tru>
+  ts.src = "https://top-fwz1.mail.ru/js/code.js";
+  var f = function () {var s = d.getElementsByTagName("script")[0]; s.parentNode.>
+
+                                [ Read 652 lines ]
+^G Help      ^O Write Out ^W Where Is  ^K Cut       ^T Execute   ^C Location
+^X Exit      ^R Read File ^\ Replace   ^U Paste     ^J Justify   ^/ Go To Line
