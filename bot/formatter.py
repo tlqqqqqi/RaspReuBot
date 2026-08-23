@@ -1,4 +1,5 @@
 import html
+import re
 from datetime import date
 
 from . import texts as t
@@ -75,7 +76,7 @@ def _lesson_block(lesson: Lesson) -> str:
 
 
 def format_day(day: Day) -> str:
-    header = f"📅 <b>{_date_str(day.date, day.weekday)}</b>"
+    header = f"{_DAY_MARK} <b>{_date_str(day.date, day.weekday)}</b>"
     if not day.has_lessons:
         return f"{header}\n\nЗанятий нет"
     blocks = f"\n{_SEP}\n".join(_lesson_block(l) for l in day.lessons)
@@ -212,6 +213,50 @@ def format_review(review: dict, pos: int, total: int) -> str:
         body = body[:3500].rstrip() + "…"
     lines += ["", body]
     return "\n".join(lines)
+
+
+# Лимит одного сообщения Telegram. Неделя загруженной группы (5.5к символов)
+# или период на 12 дней (4.7к) за него вылезают.
+TG_LIMIT = 4096
+
+# Начало блока дня. Резать можно только перед ним: внутри дня "\n\n" тоже есть
+# (между шапкой и парами), так что по нему рвать нельзя — оторвётся заголовок.
+_DAY_MARK = "📅"
+_DAY_SPLIT = re.compile(rf"\n\n(?={re.escape(_DAY_MARK)})")
+
+
+def split_for_telegram(text: str, limit: int = TG_LIMIT) -> list[str]:
+    """Режет длинный текст на куски <= limit по границам дней.
+
+    Куски склеиваются обратно через "\n\n" без потерь. HTML-теги остаются
+    сбалансированными, потому что день — цельный блок. Если один день сам
+    длиннее лимита, дробим его по строкам, в самом крайнем случае — по символам.
+    """
+    if len(text) <= limit:
+        return [text]
+
+    def pack(pieces: list[str], sep: str) -> list[str]:
+        out: list[str] = []
+        cur = ""
+        for piece in pieces:
+            candidate = f"{cur}{sep}{piece}" if cur else piece
+            if len(candidate) <= limit:
+                cur = candidate
+                continue
+            if cur:
+                out.append(cur)
+            if len(piece) <= limit:
+                cur = piece
+            else:  # день сам не влезает — дробим глубже
+                deeper = (pack(piece.split("\n"), "\n") if sep != "\n"
+                          else [piece[i:i + limit] for i in range(0, len(piece), limit)])
+                out.extend(deeper[:-1])
+                cur = deeper[-1]
+        if cur:
+            out.append(cur)
+        return out
+
+    return [c for c in pack(_DAY_SPLIT.split(text), "\n\n") if c.strip()]
 
 
 def format_week(week: Week, selection_name: str) -> str:

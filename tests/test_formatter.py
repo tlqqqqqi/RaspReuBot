@@ -1,5 +1,6 @@
 from datetime import date
 
+from bot import formatter as f
 from bot.formatter import (
     format_day,
     format_free_rooms,
@@ -171,3 +172,30 @@ class TestReviews:
         review = {"overall_rating": 4, "review_text": "", "created_at": None}
         text = format_review(review, 0, 1)
         assert "без текста" in text
+
+
+class TestSplitForTelegram:
+    """Длинное расписание не влезает в одно сообщение Telegram (4096)."""
+
+    def test_short_text_stays_one_piece(self):
+        assert f.split_for_telegram("коротко") == ["коротко"]
+
+    def test_splits_on_day_boundaries(self):
+        days = ["📅 <b>День %d</b>\n\n%s" % (i, "пара\n" * 120) for i in range(12)]
+        text = "\n\n".join(days)
+        chunks = f.split_for_telegram(text, limit=4096)
+        assert len(chunks) > 1
+        assert all(len(c) <= 4096 for c in chunks)
+        # ничего не потеряли и не переставили
+        assert "\n\n".join(chunks) == text
+        # режем строго между днями, а не посреди дня
+        assert all(c.lstrip().startswith("📅") for c in chunks)
+
+    def test_oversized_single_block_is_hard_split(self):
+        chunks = f.split_for_telegram("строка\n" * 2000, limit=4096)
+        assert all(len(c) <= 4096 for c in chunks)
+        assert all(c for c in chunks)
+
+    def test_never_returns_empty_chunks(self):
+        chunks = f.split_for_telegram("a\n\n" * 3000, limit=1000)
+        assert all(c.strip() for c in chunks)

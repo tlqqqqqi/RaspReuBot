@@ -11,6 +11,7 @@ from ..db import get_user
 from ..formatter import format_day, format_range
 from ..keyboards import cancel_input, main_menu
 from ..states import DateInput
+from ._send import edit_long
 from .. import provider
 from .. import texts as t
 
@@ -96,11 +97,10 @@ async def handle_date_input(
     try:
         days = await provider.get_days(session, db_path, user, target, target)
         text = format_day(provider.stub_days(days, [target])[0])
+        await edit_long(loading, text, main_menu())
     except Exception:
         logger.exception("Failed to fetch date schedule for chat_id=%s", message.from_user.id)
-        text = t.SCHEDULE_ERROR
-
-    await loading.edit_text(text, parse_mode="HTML", reply_markup=main_menu())
+        await loading.edit_text(t.SCHEDULE_ERROR, reply_markup=main_menu())
 
 
 @router.message(DateInput.waiting_for_range)
@@ -134,8 +134,7 @@ async def handle_range_input(
         days = await provider.get_days(session, db_path, user, start, end)
         name = user["selection_name"] or user["selection_key"]
         text = format_range(provider.stub_days(days, dates), name)
+        await edit_long(loading, text, main_menu())
     except Exception:
         logger.exception("Failed to fetch range schedule for chat_id=%s", message.from_user.id)
-        text = t.SCHEDULE_ERROR
-
-    await loading.edit_text(text, parse_mode="HTML", reply_markup=main_menu())
+        await loading.edit_text(t.SCHEDULE_ERROR, reply_markup=main_menu())

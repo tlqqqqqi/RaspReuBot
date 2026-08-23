@@ -11,6 +11,7 @@ from ..keyboards import main_menu
 from ..parser import Week
 from .. import provider
 from .. import texts as t
+from ._send import edit_long
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -43,11 +44,10 @@ async def cb_today(
 
     try:
         text = await _get_day(session, db_path, user, date.today())
+        await edit_long(loading_msg, text, main_menu())
     except Exception:
         logger.exception("Failed to fetch today's schedule for chat_id=%s", callback.from_user.id)
-        text = t.SCHEDULE_ERROR
-
-    await loading_msg.edit_text(text, parse_mode="HTML", reply_markup=main_menu())
+        await loading_msg.edit_text(t.SCHEDULE_ERROR, reply_markup=main_menu())
 
 
 @router.callback_query(F.data == "schedule:tomorrow")
@@ -67,11 +67,10 @@ async def cb_tomorrow(
     try:
         tomorrow = date.today() + timedelta(days=1)
         text = await _get_day(session, db_path, user, tomorrow)
+        await edit_long(loading_msg, text, main_menu())
     except Exception:
         logger.exception("Failed to fetch tomorrow's schedule for chat_id=%s", callback.from_user.id)
-        text = t.SCHEDULE_ERROR
-
-    await loading_msg.edit_text(text, parse_mode="HTML", reply_markup=main_menu())
+        await loading_msg.edit_text(t.SCHEDULE_ERROR, reply_markup=main_menu())
 
 
 @router.callback_query(F.data == "schedule:week")
@@ -98,8 +97,7 @@ async def cb_week(
             Week(week_num=0, days=full),
             user["selection_name"] or user["selection_key"],
         )
+        await edit_long(loading_msg, text, main_menu())
     except Exception:
         logger.exception("Failed to fetch week schedule for chat_id=%s", callback.from_user.id)
-        text = t.SCHEDULE_ERROR
-
-    await loading_msg.edit_text(text, parse_mode="HTML", reply_markup=main_menu())
+        await loading_msg.edit_text(t.SCHEDULE_ERROR, reply_markup=main_menu())
