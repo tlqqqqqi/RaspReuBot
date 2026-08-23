@@ -17,14 +17,19 @@ from .parser import Day, Lesson, SubgroupInfo
 
 logger = logging.getLogger(__name__)
 
-_BASE = "https://eilpyzysgdyrpunkhosb.supabase.co/rest/v1"
-# Анонимный ключ из бандла pleh.tech (role=anon, exp 2070). Если протухнет —
-# перевытащить из https://pleh.tech/assets/index-*.js
+# pleh.tech в 2026 съехал со своего проекта на supabase.co на самохост за
+# собственным доменом: в бандле база берётся из window.location.origin.
+# Старый хост eilpyzysgdyrpunkhosb.supabase.co ещё жив, но вьюхи расписания
+# там пустые (200 + []) — бот молча слал «Занятий нет».
+_BASE = "https://pleh.tech/rest/v1"
+# Анонимный ключ из бандла pleh.tech (role=anon, exp 2036). Ключ и хост меняются
+# только парой: старый ключ на новом хосте даёт 401.
+# Если протухнет — перевытащить из https://pleh.tech/assets/index-*.js
 _ANON = (
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
-    "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVpbHB5enlzZ2R5cnB1bmtob3NiIiwicm9sZSI6"
-    "ImFub24iLCJpYXQiOjE3NTQ3NjU1MjMsImV4cCI6MjA3MDM0MTUyM30."
-    "DHnIfVoKZW2BIHTnY0bYIp_V5MPl7pU4PEKGtMFIO5U"
+    "eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzgxNDM2NjY5LCJleHAi"
+    "OjIwOTY3OTY2Njl9."
+    "uVBH4rCUVsarTmNqhiKBw8kvLqKygVvs31fkWW0C6u0"
 )
 _HDR = {"apikey": _ANON, "Authorization": f"Bearer {_ANON}"}
 # Вьюхи расписания лежат в схеме `api`, не `public`.
