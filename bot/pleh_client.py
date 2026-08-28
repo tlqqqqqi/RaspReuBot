@@ -13,7 +13,7 @@ from datetime import date
 
 import aiohttp
 
-from .config import site_proxy
+from .config import USER_AGENT, site_proxy
 from .parser import Day, Lesson, SubgroupInfo
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,8 @@ _ANON = (
     "OjIwOTY3OTY2Njl9."
     "uVBH4rCUVsarTmNqhiKBw8kvLqKygVvs31fkWW0C6u0"
 )
-_HDR = {"apikey": _ANON, "Authorization": f"Bearer {_ANON}"}
+# User-Agent обязателен: без «браузерного» nginx pleh.tech отдаёт 403.
+_HDR = {"apikey": _ANON, "Authorization": f"Bearer {_ANON}", "User-Agent": USER_AGENT}
 # Вьюхи расписания лежат в схеме `api`, не `public`.
 _HDR_API = {**_HDR, "Accept-Profile": "api"}
 

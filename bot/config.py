@@ -5,6 +5,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+# pleh.tech (nginx/WAF) отдаёт 403 на «ботовый» User-Agent (python/aiohttp) —
+# даже с разрешённого RU-IP. rasp.rea.ru тоже дружелюбнее к браузерному UA.
+# Поэтому оба клиента представляются десктопным Chrome.
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+)
+
+
 def site_proxy() -> str | None:
     """HTTP-прокси для запросов к источникам расписания (pleh.tech и rasp.rea.ru).
 

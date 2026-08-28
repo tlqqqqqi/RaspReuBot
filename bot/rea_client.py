@@ -6,7 +6,7 @@ from datetime import date
 import aiohttp
 from bs4 import BeautifulSoup
 
-from .config import site_proxy
+from .config import USER_AGENT, site_proxy
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -17,7 +17,7 @@ from tenacity import (
 logger = logging.getLogger(__name__)
 
 _BASE = "https://rasp.rea.ru"
-_HEADERS = {"X-Requested-With": "XMLHttpRequest"}
+_HEADERS = {"X-Requested-With": "XMLHttpRequest", "User-Agent": USER_AGENT}
 _sem = asyncio.Semaphore(5)
 
 # Сайт режет IP некоторых хостингов анти-бот заглушкой. Если задан SITE_PROXY
