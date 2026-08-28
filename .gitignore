@@ -1,4 +1,7 @@
 .env
+
+# Заполненный Xray-конфиг с секретами ноды (шаблон — xray-client.config.template.json)
+deploy/config.json
 *.db
 *.db-shm
 *.db-wal

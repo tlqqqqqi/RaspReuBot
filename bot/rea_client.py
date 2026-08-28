@@ -1,11 +1,12 @@
 import asyncio
 import json
 import logging
-import os
 from datetime import date
 
 import aiohttp
 from bs4 import BeautifulSoup
+
+from .config import site_proxy
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -19,8 +20,8 @@ _BASE = "https://rasp.rea.ru"
 _HEADERS = {"X-Requested-With": "XMLHttpRequest"}
 _sem = asyncio.Semaphore(5)
 
-# Сайт режет IP некоторых хостингов анти-бот заглушкой. Если задан REA_PROXY
-# (HTTP-прокси, напр. http://127.0.0.1:10809), запросы к сайту идут через него.
+# Сайт режет IP некоторых хостингов анти-бот заглушкой. Если задан SITE_PROXY
+# (или REA_PROXY-алиас, напр. http://127.0.0.1:10809), запросы идут через него.
 # Пусто → ходим напрямую (поведение по умолчанию).
 _INTERSTITIAL_ATTEMPTS = 2
 _INTERSTITIAL_WAIT = 3
@@ -31,7 +32,7 @@ class InterstitialError(RuntimeError):
 
 
 def _proxy() -> str | None:
-    return os.getenv("REA_PROXY") or None
+    return site_proxy()
 
 _retry = retry(
     stop=stop_after_attempt(3),

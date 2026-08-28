@@ -13,6 +13,7 @@ from datetime import date
 
 import aiohttp
 
+from .config import site_proxy
 from .parser import Day, Lesson, SubgroupInfo
 
 logger = logging.getLogger(__name__)
@@ -67,8 +68,10 @@ FREE_ROOM_BUILDINGS = [
 
 async def _get(session, path, headers, params):
     # params — список (key, value): допускает повторяющиеся ключи (day=gte&day=lte).
+    # proxy — самохост pleh.tech режет датацентровые IP (403); на VPS ходим через Xray.
     async with session.get(
-        f"{_BASE}/{path}", params=params, headers=headers, timeout=_TIMEOUT
+        f"{_BASE}/{path}", params=params, headers=headers,
+        proxy=site_proxy(), timeout=_TIMEOUT,
     ) as resp:
         resp.raise_for_status()
         return await resp.json()

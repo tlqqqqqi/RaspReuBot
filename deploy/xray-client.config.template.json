@@ -1,0 +1,44 @@
+{
+  "//": "Локальный Xray-КЛИЕНТ на сервере с ботом. outbound -> RU exit-нода,",
+  "//inbound": "http на 127.0.0.1:10809 -> сюда смотрит бот через SITE_PROXY.",
+  "//deploy": "Заполнить значениями из trojan://-ссылки x-ui, положить как",
+  "//path": "/usr/local/etc/xray/config.json, затем systemctl enable --now xray.",
+  "//secrets": "НЕ коммитить заполненный файл — в нём пароль/ключи ноды.",
+  "log": { "loglevel": "warning" },
+  "inbounds": [
+    {
+      "tag": "http-in",
+      "listen": "127.0.0.1",
+      "port": 10809,
+      "protocol": "http",
+      "sniffing": { "enabled": true, "destOverride": ["http", "tls"] }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "proxy",
+      "protocol": "trojan",
+      "settings": {
+        "servers": [
+          {
+            "address": "<RU-NODE-HOST>",
+            "port": 2083,
+            "password": "<TROJAN-PASSWORD>"
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "reality",
+        "realitySettings": {
+          "show": false,
+          "fingerprint": "chrome",
+          "serverName": "<SNI>",
+          "publicKey": "<REALITY-PUBLIC-KEY>",
+          "shortId": "<SHORT-ID>",
+          "spiderX": "<SPIDER-X>"
+        }
+      }
+    }
+  ]
+}

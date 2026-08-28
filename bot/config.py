@@ -5,6 +5,17 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def site_proxy() -> str | None:
+    """HTTP-прокси для запросов к источникам расписания (pleh.tech и rasp.rea.ru).
+
+    И pleh.tech (самохост), и rasp.rea.ru режут датацентровые IP (403 / анти-бот
+    заглушка). На VPS запросы к обоим надо гнать через локальный Xray-инбаунд.
+    Единый `SITE_PROXY` (напр. http://127.0.0.1:10809) используют оба клиента;
+    `REA_PROXY` оставлен как алиас для обратной совместимости. Пусто → напрямую.
+    """
+    return os.getenv("SITE_PROXY") or os.getenv("REA_PROXY") or None
+
+
 @dataclass
 class Config:
     bot_token: str
