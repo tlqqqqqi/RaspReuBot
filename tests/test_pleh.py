@@ -93,3 +93,53 @@ class TestReaFallbackEnrich:
         lessons = [l for d in days for l in d.lessons]
         assert lessons
         assert all(l.subgroups[0].teacher == "Иванов Иван Иванович" for l in lessons)
+
+
+class TestFetchDaysRpc:
+    @pytest.mark.asyncio
+    async def test_long_range_split_into_7_day_windows(self, monkeypatch):
+        # RPC group_week режет диапазон > 7 дней (400 «invalid range»).
+        calls = []
+
+        async def fake_get(session, path, headers, params):
+            calls.append((path, dict(params)))
+            return []
+
+        monkeypatch.setattr(p, "_get", fake_get)
+        await p.fetch_days(None, "guid", "group", date(2026, 9, 28), date(2026, 10, 14))
+        assert [c[0] for c in calls] == ["rpc/group_week"] * 3
+        assert [(c[1]["p_from"], c[1]["p_to"]) for c in calls] == [
+            ("2026-09-28", "2026-10-04"),
+            ("2026-10-05", "2026-10-11"),
+            ("2026-10-12", "2026-10-14"),
+        ]
+        assert all(c[1]["p_group_guid"] == "guid" for c in calls)
+
+    @pytest.mark.asyncio
+    async def test_teacher_uses_teacher_week(self, monkeypatch):
+        calls = []
+
+        async def fake_get(session, path, headers, params):
+            calls.append((path, dict(params)))
+            return [_TEACHER_ROW]
+
+        monkeypatch.setattr(p, "_get", fake_get)
+        days = await p.fetch_days(None, "slug", "teacher", date(2026, 7, 10), date(2026, 7, 10))
+        assert calls[0][0] == "rpc/teacher_week"
+        assert calls[0][1]["p_teacher_slug"] == "slug"
+        assert days[0].lessons[0].subgroups[0].teacher == "Группа: 15.25Д-ЭФК03/25б"
+
+
+class TestRpcRows:
+    def test_teacher_name_fallback(self):
+        row = {**_GROUP_ROW, "instructor_names": None, "teacher_names": None,
+               "teacher_name": "Муратова Ольга Анатольевна"}
+        les = p._rows_to_days([row], is_teacher=False)[0].lessons[0]
+        assert les.subgroups[0].teacher == "Муратова Ольга Анатольевна"
+
+    def test_teacher_stream_rows_merged(self):
+        # Поточная пара у препода: одна строка на группу → одно занятие, группы через запятую.
+        rows = [_TEACHER_ROW, {**_TEACHER_ROW, "group_name": "15.25Д-ЭФК04/25б"}]
+        lessons = p._rows_to_days(rows, is_teacher=True)[0].lessons
+        assert len(lessons) == 1
+        assert lessons[0].subgroups[0].teacher == "Группа: 15.25Д-ЭФК03/25б, 15.25Д-ЭФК04/25б"

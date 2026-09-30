@@ -8,8 +8,9 @@
 """
 from __future__ import annotations
 
+import asyncio
 import logging
-from datetime import date
+from datetime import date, timedelta
 
 import aiohttp
 
@@ -38,6 +39,8 @@ _HDR = {"apikey": _ANON, "Authorization": f"Bearer {_ANON}", "User-Agent": USER_
 _HDR_API = {**_HDR, "Accept-Profile": "api"}
 
 _TIMEOUT = aiohttp.ClientTimeout(total=15)
+# rpc/group_week и rpc/teacher_week: p_to - p_from ≤ 6 дней, иначе 400 «invalid range».
+_RPC_MAX_DAYS = 7
 
 # Звонки (api.class_periods). Стабильны, совпадают с rasp.rea.ru.
 _PERIOD_TIMES: dict[int, tuple[str, str]] = {
@@ -154,7 +157,10 @@ def _row_to_lesson(row: dict, is_teacher: bool) -> Lesson:
         subs = [SubgroupInfo(name="", teacher=f"Группа: {group}" if group else "",
                              location=location)]
     else:
-        names = row.get("instructor_names") or []
+        # group_week отдаёт ФИО в трёх полях; фронт pleh берёт первое непустое.
+        names = row.get("instructor_names") or row.get("teacher_names") or []
+        if not names and row.get("teacher_name"):
+            names = [row["teacher_name"]]
         teacher = ", ".join(names) if isinstance(names, list) else ""
         sub_name = (row.get("subgroup") or "").strip()
         subs = [SubgroupInfo(name=sub_name, teacher=teacher, location=location)]
@@ -170,7 +176,29 @@ def _row_to_lesson(row: dict, is_teacher: bool) -> Lesson:
     )
 
 
+def _merge_teacher_rows(rows: list[dict]) -> list[dict]:
+    """teacher_week отдаёт поточную пару строкой на каждую группу — склеиваем в одну.
+
+    Ключ тот же, что у фронта pleh: день, пара, дисциплина, аудитория, тип.
+    """
+    merged: dict[tuple, dict] = {}
+    for r in rows:
+        key = (r.get("day"), r.get("period"), r.get("discipline"), r.get("room"),
+               r.get("building"), r.get("workload_type"))
+        if key not in merged:
+            merged[key] = dict(r)
+            continue
+        cur = merged[key]
+        group = (r.get("group_name") or "").strip()
+        known = [g.strip() for g in (cur.get("group_name") or "").split(",") if g.strip()]
+        if group and group not in known:
+            cur["group_name"] = ", ".join([*known, group])
+    return list(merged.values())
+
+
 def _rows_to_days(rows: list[dict], is_teacher: bool) -> list[Day]:
+    if is_teacher:
+        rows = _merge_teacher_rows(rows)
     by_day: dict[str, list[dict]] = {}
     for row in rows:
         by_day.setdefault(row["day"], []).append(row)
@@ -196,26 +224,39 @@ async def fetch_days(
     """Расписание за период [start, end] для группы или преподавателя.
 
     Возвращает только дни, в которых есть занятия (как и парсер rasp).
+
+    С 2026-09 nginx pleh.tech отдаёт 403 на прямое чтение вьюх lessons_current /
+    lessons_public / teacher_lessons_current; фронт перешёл на RPC group_week /
+    teacher_week — ходим туда же. RPC принимает не больше 7 дней (иначе 400
+    «invalid range»), поэтому длинный период режем на окна.
     """
     is_teacher = kind == "teacher"
     if is_teacher:
-        view, key_col = "teacher_lessons_current", "teacher_slug"
+        rpc, key_param = "rpc/teacher_week", "p_teacher_slug"
         select = "day,period,discipline,workload_type,room,building,campus,group_name,subgroup"
     else:
-        view, key_col = "lessons_current", "group_guid"
+        rpc, key_param = "rpc/group_week", "p_group_guid"
         select = ("day,period,discipline,workload_type,room,building,campus,"
-                  "subgroup,instructor_names,platform,resource_url")
+                  "subgroup,teacher_name,teacher_names,instructor_names")
 
-    rows = await _get(
-        session, view, _HDR_API, [
+    windows = []
+    cur = start
+    while cur <= end:
+        win_end = min(cur + timedelta(days=_RPC_MAX_DAYS - 1), end)
+        windows.append((cur, win_end))
+        cur = win_end + timedelta(days=1)
+
+    chunks = await asyncio.gather(*(
+        _get(session, rpc, _HDR_API, [
+            (key_param, selection_key),
+            ("p_from", w_start.isoformat()),
+            ("p_to", w_end.isoformat()),
             ("select", select),
-            (key_col, f"eq.{selection_key}"),
-            ("day", f"gte.{start.isoformat()}"),
-            ("day", f"lte.{end.isoformat()}"),
             ("order", "day.asc,period.asc"),
-        ],
-    )
-    return _rows_to_days(rows, is_teacher)
+        ])
+        for w_start, w_end in windows
+    ))
+    return _rows_to_days([r for rows in chunks for r in rows], is_teacher)
 
 
 async def fetch_teacher_stats(
