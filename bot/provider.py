@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import date
 
@@ -129,7 +130,23 @@ async def _rea_days(session, query: str, start: date, end: date) -> list[Day]:
         if week.days and week.days[-1].date >= end:
             break
         wn = week.week_num + 1
-    return [collected[k] for k in sorted(collected)]
+    days = [collected[k] for k in sorted(collected)]
+    await _enrich_rea(session, rkey, days)
+    return days
+
+
+async def _enrich_rea(session, rkey: str, days: list[Day]) -> None:
+    """Карточка rasp не содержит ФИО преподавателя и подгрупп — только GetDetails.
+
+    Ошибки fetch_details глотает сам (вернёт []), тогда остаётся location из карточки.
+    """
+    pairs = [(d, l) for d in days for l in d.lessons]
+    results = await asyncio.gather(
+        *(rea_client.fetch_details(session, rkey, d.date, l.pair_num) for d, l in pairs)
+    )
+    for (_, lesson), subs in zip(pairs, results):
+        if subs:
+            lesson.subgroups = subs
 
 
 def stub_days(days: list[Day], dates: list[date]) -> list[Day]:

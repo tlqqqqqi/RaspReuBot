@@ -1,9 +1,12 @@
 """Офлайн-тесты маппинга pleh.tech и провайдера. В сеть не ходят."""
 from datetime import date
+from pathlib import Path
+
+import pytest
 
 from bot import pleh_client as p
 from bot import provider
-from bot.parser import Day
+from bot.parser import Day, SubgroupInfo
 
 _GROUP_ROW = {
     "day": "2026-06-16", "period": 1, "discipline": "Макроэкономика",
@@ -65,3 +68,28 @@ class TestStubDays:
         assert out[0].lessons == [] and out[2].lessons == []
         assert out[1].lessons  # вторник с парами
         assert out[0].weekday == "ПОНЕДЕЛЬНИК"
+
+
+class TestReaFallbackEnrich:
+    @pytest.mark.asyncio
+    async def test_fallback_fills_teacher_from_details(self, monkeypatch):
+        # Карточка rasp без ФИО → fallback обязан дотянуть его через GetDetails.
+        html = (Path(__file__).parent / "fixtures" / "week_34_group.html").read_text()
+
+        async def fake_search(session, query):
+            return [{"key": "k"}]
+
+        async def fake_week(session, key, week_num=-1):
+            return html
+
+        async def fake_details(session, key, d, pair):
+            return [SubgroupInfo(name="", teacher="Иванов Иван Иванович", location="x")]
+
+        monkeypatch.setattr(provider.rea_client, "search", fake_search)
+        monkeypatch.setattr(provider.rea_client, "fetch_week", fake_week)
+        monkeypatch.setattr(provider.rea_client, "fetch_details", fake_details)
+
+        days = await provider._rea_days(None, "q", date(2026, 4, 20), date(2026, 4, 26))
+        lessons = [l for d in days for l in d.lessons]
+        assert lessons
+        assert all(l.subgroups[0].teacher == "Иванов Иван Иванович" for l in lessons)
